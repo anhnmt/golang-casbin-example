@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	mongodbadapter "github.com/casbin/mongodb-adapter/v3"
@@ -21,7 +23,7 @@ func main() {
 	// default collection name 'casbin_rule'.
 	mongoClientOption := options.Client().ApplyURI(viper.GetString("DB_URL"))
 	databaseName := viper.GetString("DB_NAME")
-	a, err := mongodbadapter.NewAdapterWithClientOption(mongoClientOption, databaseName)
+	a, err := mongodbadapter.NewAdapterWithClientOption(mongoClientOption, databaseName, 10*time.Second)
 	// Or you can use NewAdapterWithCollectionName for custom collection name.
 	if err != nil {
 		panic(err)
