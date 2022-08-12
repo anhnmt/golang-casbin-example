@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/casbin/casbin/v2"
@@ -59,26 +62,54 @@ func main() {
 	}
 
 	// Check the permission.
-	enforce, err := e.Enforce("alice", "data1", "read")
-	if err != nil {
-		log.Fatalf("error: enforce: %s", err)
-		return
-	}
-
-	if enforce {
-		log.Infof("alice can read data1")
-	} else {
-		log.Infof("alice cannot read data1")
-	}
+	// enforce, err := e.Enforce("alice", "data1", "read")
+	// if err != nil {
+	// 	log.Fatalf("error: enforce: %s", err)
+	// 	return
+	// }
+	//
+	// if enforce {
+	// 	log.Infof("alice can read data1")
+	// } else {
+	// 	log.Infof("alice cannot read data1")
+	// }
 
 	// Modify the policy.
 	// e.AddPolicy(...)
 	// e.RemovePolicy(...)
 
 	// Save the policy back to DB.
-	err = e.SavePolicy()
-	if err != nil {
-		log.Fatalf("error: save policy: %s", err)
+	// err = e.SavePolicy()
+	// if err != nil {
+	// 	log.Fatalf("error: save policy: %s", err)
+	// 	return
+	// }
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", HelloHandler)
+	mux.HandleFunc("/time", CurrentTimeHandler)
+
+	if err = http.ListenAndServe(":8080", middleware(mux)); err != nil {
+		log.Fatalf("error: listen and serve: %s", err)
 		return
 	}
+}
+
+func HelloHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Hello, World!"))
+}
+
+func CurrentTimeHandler(w http.ResponseWriter, r *http.Request) {
+	curTime := time.Now().Format(time.Kitchen)
+	w.Write([]byte(fmt.Sprintf("the current time is %v", curTime)))
+}
+
+func middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, "requestTime", time.Now().Format(time.RFC3339))
+		r = r.WithContext(ctx)
+		next.ServeHTTP(w, r)
+		log.Info().Interface("RequestURI", r.RequestURI).Msg("middleware logger")
+	})
 }
