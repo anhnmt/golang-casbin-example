@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -89,19 +90,23 @@ func main() {
 	mux.HandleFunc("/", HelloHandler)
 	mux.HandleFunc("/time", CurrentTimeHandler)
 
-	if err = http.ListenAndServe(":8080", middleware(mux)); err != nil {
+	host := fmt.Sprintf(":%d", viper.GetInt("APP_PORT"))
+	log.Infof("Starting application http://localhost%s", host)
+
+	if err = http.ListenAndServe(host, middleware(mux)); err != nil {
 		log.Fatalf("error: listen and serve: %s", err)
 		return
 	}
 }
 
 func HelloHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Hello, World!"))
+	responseWithJson(w, http.StatusOK, "Hello, World!")
 }
 
 func CurrentTimeHandler(w http.ResponseWriter, r *http.Request) {
 	curTime := time.Now().Format(time.Kitchen)
-	w.Write([]byte(fmt.Sprintf("the current time is %v", curTime)))
+
+	responseWithJson(w, http.StatusOK, fmt.Sprintf("the current time is %v", curTime))
 }
 
 func middleware(next http.Handler) http.Handler {
@@ -112,4 +117,16 @@ func middleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 		log.Info().Interface("RequestURI", r.RequestURI).Msg("middleware logger")
 	})
+}
+
+// responseWithJson writes a json response.
+func responseWithJson(w http.ResponseWriter, status int, object any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+
+	err := json.NewEncoder(w).Encode(object)
+	if err != nil {
+		log.Err(err).Msg("Failed to encode json")
+		return
+	}
 }
