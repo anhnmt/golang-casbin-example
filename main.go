@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -44,7 +43,7 @@ func main() {
 		e = some(where (p.eft == allow))
 		
 		[matchers]
-		m = r.sub == p.sub && r.obj == p.obj && r.act == p.act
+		m = r.sub == p.sub && r.obj == p.obj && (r.act == p.act || p.act == "*")
 	`)
 	if err != nil {
 		log.Fatalf("error: model: %s", err)
@@ -62,60 +61,81 @@ func main() {
 		return
 	}
 
-	// Check the permission.
-	// enforce, err := e.Enforce("alice", "data1", "read")
-	// if err != nil {
-	// 	log.Fatalf("error: enforce: %s", err)
-	// 	return
-	// }
-	//
-	// if enforce {
-	// 	log.Infof("alice can read data1")
-	// } else {
-	// 	log.Infof("alice cannot read data1")
-	// }
-
 	// Modify the policy.
 	// e.AddPolicy(...)
 	// e.RemovePolicy(...)
 
+	e.AddPolicy("user", "/", "*")
+	e.AddPolicy("user", "/time", "*")
+
+	e.AddPolicy("admin", "/*", "*")
+
 	// Save the policy back to DB.
-	// err = e.SavePolicy()
-	// if err != nil {
-	// 	log.Fatalf("error: save policy: %s", err)
-	// 	return
-	// }
+	err = e.SavePolicy()
+	if err != nil {
+		log.Fatalf("error: save policy: %s", err)
+		return
+	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", HelloHandler)
-	mux.HandleFunc("/time", CurrentTimeHandler)
+	mux.Handle("/", HelloHandler())
+	mux.Handle("/time", CurrentTimeHandler())
+	mux.Handle("/protected", ProtectedHandler())
 
 	host := fmt.Sprintf(":%d", viper.GetInt("APP_PORT"))
 	log.Infof("Starting application http://localhost%s", host)
 
-	if err = http.ListenAndServe(host, middleware(mux)); err != nil {
+	if err = http.ListenAndServe(host, middleware(e, mux)); err != nil {
 		log.Fatalf("error: listen and serve: %s", err)
 		return
 	}
 }
 
-func HelloHandler(w http.ResponseWriter, r *http.Request) {
-	responseWithJson(w, http.StatusOK, "Hello, World!")
-}
-
-func CurrentTimeHandler(w http.ResponseWriter, r *http.Request) {
-	curTime := time.Now().Format(time.Kitchen)
-
-	responseWithJson(w, http.StatusOK, fmt.Sprintf("the current time is %v", curTime))
-}
-
-func middleware(next http.Handler) http.Handler {
+func HelloHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		ctx = context.WithValue(ctx, "requestTime", time.Now().Format(time.RFC3339))
-		r = r.WithContext(ctx)
-		next.ServeHTTP(w, r)
+		responseWithJson(w, http.StatusOK, "Hello, World!")
+	})
+}
+
+func CurrentTimeHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		curTime := time.Now().Format(time.RFC3339)
+
+		responseWithJson(w, http.StatusOK, fmt.Sprintf("the current time is %v", curTime))
+	})
+}
+
+func ProtectedHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		responseWithJson(w, http.StatusOK, "Protect passed")
+	})
+}
+
+func middleware(e *casbin.Enforcer, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Interface("RequestURI", r.RequestURI).Msg("middleware logger")
+
+		role := r.Header.Get("role")
+		resource := r.URL.RequestURI()
+		method := r.Method
+
+		if role == "" {
+			responseWithJson(w, http.StatusUnauthorized, fmt.Sprintf("no role assigned"))
+			return
+		}
+
+		allowed, err := e.Enforce(role, resource, method)
+		if err != nil {
+			responseWithJson(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		if allowed {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		responseWithJson(w, http.StatusUnauthorized, "The current role ("+role+") is not allowed to execute "+resource+" ["+method+"]\n")
 	})
 }
 
@@ -128,5 +148,14 @@ func responseWithJson(w http.ResponseWriter, status int, object any) {
 	if err != nil {
 		log.Err(err).Msg("Failed to encode json")
 		return
+	}
+}
+
+func check(e *casbin.Enforcer, sub, obj, act string) {
+	ok, _ := e.Enforce(sub, obj, act)
+	if ok {
+		log.Printf("%s Can %s %s\n", sub, act, obj)
+	} else {
+		log.Printf("%s Can not %s %s\n", sub, act, obj)
 	}
 }
