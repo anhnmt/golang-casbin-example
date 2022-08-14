@@ -73,12 +73,14 @@ func main() {
 	}
 }
 
+// HelloHandler returns "Hello, World!".
 func HelloHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		responseWithJson(w, http.StatusOK, "Hello, World!")
 	})
 }
 
+// CurrentTimeHandler returns the current time.
 func CurrentTimeHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		curTime := time.Now().Format(time.RFC3339)
@@ -87,12 +89,14 @@ func CurrentTimeHandler() http.Handler {
 	})
 }
 
+// ProtectedHandler returns "Protected" if passed.
 func ProtectedHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		responseWithJson(w, http.StatusOK, "Protect passed")
 	})
 }
 
+// middleware is a middleware that enforces authorization.
 func middleware(e *casbin.Enforcer, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Interface("RequestURI", r.RequestURI).Msg("middleware logger")
@@ -106,6 +110,7 @@ func middleware(e *casbin.Enforcer, next http.Handler) http.Handler {
 			return
 		}
 
+		// check if the user has permission to access the resource.
 		allowed, err := e.Enforce(role, resource, "*")
 		if err != nil {
 			log.Err(err).Msg("Failed to enforce")
@@ -113,11 +118,13 @@ func middleware(e *casbin.Enforcer, next http.Handler) http.Handler {
 			return
 		}
 
+		// if the user has permission to access the resource, then pass the request to the next handler.
 		if allowed {
 			next.ServeHTTP(w, r)
 			return
 		}
 
+		// if the user doesn't have permission to access the resource, then return 401.
 		responseWithJson(w, http.StatusUnauthorized, "The current role ("+role+") is not allowed to execute "+resource+" ["+method+"]\n")
 	})
 }
