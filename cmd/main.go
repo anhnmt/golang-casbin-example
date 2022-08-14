@@ -59,10 +59,13 @@ func main() {
 	// 	return
 	// }
 
+	hdl := &handler{e: e}
+
 	mux := http.NewServeMux()
-	mux.Handle("/", HelloHandler())
-	mux.Handle("/time", CurrentTimeHandler())
-	mux.Handle("/protected", ProtectedHandler())
+	mux.HandleFunc("/", hdl.HelloHandler)
+	mux.HandleFunc("/time", hdl.CurrentTimeHandler)
+	mux.HandleFunc("/protected", hdl.ProtectedHandler)
+	mux.HandleFunc("/roles", hdl.RolesHandler)
 
 	host := fmt.Sprintf(":%d", viper.GetInt("APP_PORT"))
 	log.Infof("Starting application http://localhost%s", host)
@@ -71,29 +74,6 @@ func main() {
 		log.Fatalf("error: listen and serve: %s", err)
 		return
 	}
-}
-
-// HelloHandler returns "Hello, World!".
-func HelloHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		responseWithJson(w, http.StatusOK, "Hello, World!")
-	})
-}
-
-// CurrentTimeHandler returns the current time.
-func CurrentTimeHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		curTime := time.Now().Format(time.RFC3339)
-
-		responseWithJson(w, http.StatusOK, fmt.Sprintf("the current time is %v", curTime))
-	})
-}
-
-// ProtectedHandler returns "Protected" if passed.
-func ProtectedHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		responseWithJson(w, http.StatusOK, "Protect passed")
-	})
 }
 
 // middleware is a middleware that enforces authorization.
@@ -111,7 +91,7 @@ func middleware(e *casbin.Enforcer, next http.Handler) http.Handler {
 		}
 
 		// check if the user has permission to access the resource.
-		allowed, err := e.Enforce(role, resource, "*")
+		allowed, err := e.Enforce(role, resource, method)
 		if err != nil {
 			log.Err(err).Msg("Failed to enforce")
 			responseWithJson(w, http.StatusInternalServerError, err.Error())
@@ -139,4 +119,39 @@ func responseWithJson(w http.ResponseWriter, status int, object any) {
 		log.Err(err).Msg("Failed to encode json")
 		return
 	}
+}
+
+// handler
+type handler struct {
+	e *casbin.Enforcer
+}
+
+// HelloHandler returns "Hello, World!".
+func (h *handler) HelloHandler(w http.ResponseWriter, r *http.Request) {
+	responseWithJson(w, http.StatusOK, "Hello, World!")
+}
+
+// CurrentTimeHandler returns the current time.
+func (h *handler) CurrentTimeHandler(w http.ResponseWriter, r *http.Request) {
+	curTime := time.Now().Format(time.RFC3339)
+
+	responseWithJson(w, http.StatusOK, fmt.Sprintf("the current time is %v", curTime))
+}
+
+// ProtectedHandler returns "Protected" if passed.
+func (h *handler) ProtectedHandler(w http.ResponseWriter, r *http.Request) {
+	responseWithJson(w, http.StatusOK, "Protect passed")
+}
+
+// RolesHandler returns the roles of the current user.
+func (h *handler) RolesHandler(w http.ResponseWriter, r *http.Request) {
+	user := r.Header.Get("user")
+	res, err := h.e.GetRolesForUser(user)
+	if err != nil {
+		log.Err(err).Msg("Failed to get roles for user")
+		responseWithJson(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	responseWithJson(w, http.StatusOK, res)
 }
