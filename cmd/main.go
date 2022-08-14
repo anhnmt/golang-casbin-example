@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/casbin/casbin/v2"
-	"github.com/casbin/casbin/v2/model"
 	mongodbadapter "github.com/casbin/mongodb-adapter/v3"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -32,24 +31,7 @@ func main() {
 		panic(err)
 	}
 
-	m, err := model.NewModelFromString(`
-		[request_definition]
-		r = sub, obj, act
-		
-		[policy_definition]
-		p = sub, obj, act
-		
-		[policy_effect]
-		e = some(where (p.eft == allow))
-		
-		[matchers]
-		m = r.sub == p.sub && r.obj == p.obj && (r.act == p.act || p.act == "*")
-	`)
-	if err != nil {
-		log.Fatalf("error: model: %s", err)
-	}
-
-	e, err := casbin.NewEnforcer(m, a)
+	e, err := casbin.NewEnforcer(viper.GetString("MODEL_PATH"), a)
 	if err != nil {
 		log.Fatalf("error: new enforcer: %s", err)
 	}
@@ -65,17 +47,17 @@ func main() {
 	// e.AddPolicy(...)
 	// e.RemovePolicy(...)
 
-	e.AddPolicy("user", "/", "*")
-	e.AddPolicy("user", "/time", "*")
-
-	e.AddPolicy("admin", "/*", "*")
-
-	// Save the policy back to DB.
-	err = e.SavePolicy()
-	if err != nil {
-		log.Fatalf("error: save policy: %s", err)
-		return
-	}
+	// e.AddPolicy("user", "/", "*")
+	// e.AddPolicy("user", "/time", "*")
+	//
+	// e.AddPolicy("admin", "/*", "*")
+	//
+	// // Save the policy back to DB.
+	// err = e.SavePolicy()
+	// if err != nil {
+	// 	log.Fatalf("error: save policy: %s", err)
+	// 	return
+	// }
 
 	mux := http.NewServeMux()
 	mux.Handle("/", HelloHandler())
@@ -124,8 +106,9 @@ func middleware(e *casbin.Enforcer, next http.Handler) http.Handler {
 			return
 		}
 
-		allowed, err := e.Enforce(role, resource, method)
+		allowed, err := e.Enforce(role, resource, "*")
 		if err != nil {
+			log.Err(err).Msg("Failed to enforce")
 			responseWithJson(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -148,14 +131,5 @@ func responseWithJson(w http.ResponseWriter, status int, object any) {
 	if err != nil {
 		log.Err(err).Msg("Failed to encode json")
 		return
-	}
-}
-
-func check(e *casbin.Enforcer, sub, obj, act string) {
-	ok, _ := e.Enforce(sub, obj, act)
-	if ok {
-		log.Printf("%s Can %s %s\n", sub, act, obj)
-	} else {
-		log.Printf("%s Can not %s %s\n", sub, act, obj)
 	}
 }

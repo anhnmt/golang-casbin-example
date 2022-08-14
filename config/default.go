@@ -11,4 +11,6 @@ func defaultConfig() {
 	// DATABASE
 	viper.SetDefault("DB_URL", "mongodb://localhost:27017")
 	viper.SetDefault("DB_NAME", "casbin")
+
+	viper.SetDefault("MODEL_PATH", "config/model_policy.conf")
 }
