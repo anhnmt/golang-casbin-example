@@ -44,15 +44,15 @@ func main() {
 	}
 
 	// Modify the policy.
-	// e.AddPolicy(...)
-	// e.RemovePolicy(...)
-
 	// e.AddPolicy("user", "/", "*")
 	// e.AddPolicy("user", "/time", "*")
 	//
 	// e.AddPolicy("admin", "/*", "*")
 	//
-	// // Save the policy back to DB.
+	// e.AddGroupingPolicy("xdorro", "admin")
+	// e.AddGroupingPolicy("phuongnd", "user")
+
+	// Save the policy back to DB.
 	// err = e.SavePolicy()
 	// if err != nil {
 	// 	log.Fatalf("error: save policy: %s", err)
@@ -70,43 +70,10 @@ func main() {
 	host := fmt.Sprintf(":%d", viper.GetInt("APP_PORT"))
 	log.Infof("Starting application http://localhost%s", host)
 
-	if err = http.ListenAndServe(host, middleware(e, mux)); err != nil {
+	if err = http.ListenAndServe(host, hdl.middleware(mux)); err != nil {
 		log.Fatalf("error: listen and serve: %s", err)
 		return
 	}
-}
-
-// middleware is a middleware that enforces authorization.
-func middleware(e *casbin.Enforcer, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Info().Interface("RequestURI", r.RequestURI).Msg("middleware logger")
-
-		role := r.Header.Get("role")
-		resource := r.URL.RequestURI()
-		method := r.Method
-
-		if role == "" {
-			responseWithJson(w, http.StatusUnauthorized, fmt.Sprintf("no role assigned"))
-			return
-		}
-
-		// check if the user has permission to access the resource.
-		allowed, err := e.Enforce(role, resource, method)
-		if err != nil {
-			log.Err(err).Msg("Failed to enforce")
-			responseWithJson(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		// if the user has permission to access the resource, then pass the request to the next handler.
-		if allowed {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// if the user doesn't have permission to access the resource, then return 401.
-		responseWithJson(w, http.StatusUnauthorized, "The current role ("+role+") is not allowed to execute "+resource+" ["+method+"]\n")
-	})
 }
 
 // responseWithJson writes a json response.
@@ -124,6 +91,62 @@ func responseWithJson(w http.ResponseWriter, status int, object any) {
 // handler
 type handler struct {
 	e *casbin.Enforcer
+}
+
+// middleware is a middleware that enforces authorization.
+func (h *handler) middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		user := r.Header.Get("user")
+		url := r.URL.RequestURI()
+		method := r.Method
+
+		log.Info().
+			Interface("Header", r.Header.Clone()).
+			Interface("url", url).
+			Msg("middleware logger")
+
+		if user == "" {
+			responseWithJson(w, http.StatusUnauthorized, fmt.Sprintf("no user assigned"))
+			return
+		}
+
+		roles, err := h.e.GetRolesForUser(user)
+		if err != nil {
+			log.Err(err).Msg("Failed to get roles for user")
+			responseWithJson(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		log.Info().Interface("roles", roles).Msg("list roles")
+
+		// Check if the user has permission to access the resource.
+		if !h.checkPermission(roles, url, method) {
+			// if the user doesn't have permission to access the resource, then return 401.
+			responseWithJson(w, http.StatusUnauthorized, "The current user ("+user+") is not allowed to execute "+url+" ["+method+"]\n")
+			return
+		}
+
+		next.ServeHTTP(w, r)
+		return
+	})
+}
+
+// checkPermission check if the user has permission to access the resource.
+func (h *handler) checkPermission(roles []string, url string, act string) bool {
+	for _, role := range roles {
+		ok, err := h.e.Enforce(role, url, act)
+		if err != nil {
+			log.Err(err).Msg("Failed to check permission")
+			return false
+		}
+
+		if ok {
+			return true
+		}
+	}
+
+	return false
 }
 
 // HelloHandler returns "Hello, World!".
@@ -146,12 +169,13 @@ func (h *handler) ProtectedHandler(w http.ResponseWriter, r *http.Request) {
 // RolesHandler returns the roles of the current user.
 func (h *handler) RolesHandler(w http.ResponseWriter, r *http.Request) {
 	user := r.Header.Get("user")
-	res, err := h.e.GetRolesForUser(user)
+
+	roles, err := h.e.GetRolesForUser(user)
 	if err != nil {
 		log.Err(err).Msg("Failed to get roles for user")
 		responseWithJson(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	responseWithJson(w, http.StatusOK, res)
+	responseWithJson(w, http.StatusOK, roles)
 }
