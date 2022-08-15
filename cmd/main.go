@@ -31,7 +31,7 @@ func main() {
 		panic(err)
 	}
 
-	e, err := casbin.NewEnforcer(viper.GetString("MODEL_PATH"), a)
+	e, err := casbin.NewCachedEnforcer(viper.GetString("MODEL_PATH"), a)
 	if err != nil {
 		log.Fatalf("error: new enforcer: %s", err)
 	}
@@ -75,7 +75,7 @@ func responseWithJson(w http.ResponseWriter, status int, object any) {
 
 // handler
 type handler struct {
-	e *casbin.Enforcer
+	e *casbin.CachedEnforcer
 }
 
 // middleware is a middleware that enforces authorization.
