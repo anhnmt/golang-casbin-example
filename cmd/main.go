@@ -90,10 +90,6 @@ func (h *handler) middleware(next http.Handler) http.Handler {
 			Interface("url", url).
 			Msg("middleware logger")
 
-		if user == "" {
-			user = "role:anonymous"
-		}
-
 		log.Info().
 			Interface("policies", h.e.GetAllSubjects()).
 			Msg("list roles")
@@ -151,7 +147,7 @@ func (h *handler) InitHandler(w http.ResponseWriter, r *http.Request) {
 
 	h.e.AddPolicy("role:admin", "/*")
 
-	h.e.AddPolicy("role:anonymous", "/")
+	h.e.AddPolicy("*", "/")
 
 	h.e.AddGroupingPolicy("xdorro", "role:admin")
 	h.e.AddGroupingPolicy("phuongnd", "role:user")
