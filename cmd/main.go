@@ -43,22 +43,6 @@ func main() {
 		return
 	}
 
-	// Modify the policy.
-	// e.AddPolicy("user", "/", "*")
-	// e.AddPolicy("user", "/time", "*")
-	//
-	// e.AddPolicy("admin", "/*", "*")
-	//
-	// e.AddGroupingPolicy("xdorro", "admin")
-	// e.AddGroupingPolicy("phuongnd", "user")
-
-	// Save the policy back to DB.
-	// err = e.SavePolicy()
-	// if err != nil {
-	// 	log.Fatalf("error: save policy: %s", err)
-	// 	return
-	// }
-
 	hdl := &handler{e: e}
 
 	mux := http.NewServeMux()
@@ -66,6 +50,7 @@ func main() {
 	mux.HandleFunc("/time", hdl.CurrentTimeHandler)
 	mux.HandleFunc("/protected", hdl.ProtectedHandler)
 	mux.HandleFunc("/roles", hdl.RolesHandler)
+	mux.HandleFunc("/init", hdl.InitHandler)
 
 	host := fmt.Sprintf(":%d", viper.GetInt("APP_PORT"))
 	log.Infof("Starting application http://localhost%s", host)
@@ -99,7 +84,6 @@ func (h *handler) middleware(next http.Handler) http.Handler {
 
 		user := r.Header.Get("user")
 		url := r.URL.RequestURI()
-		method := r.Method
 
 		log.Info().
 			Interface("Header", r.Header.Clone()).
@@ -107,46 +91,24 @@ func (h *handler) middleware(next http.Handler) http.Handler {
 			Msg("middleware logger")
 
 		if user == "" {
-			responseWithJson(w, http.StatusUnauthorized, fmt.Sprintf("no user assigned"))
-			return
+			user = "role:anonymous"
 		}
 
-		roles, err := h.e.GetRolesForUser(user)
-		if err != nil {
-			log.Err(err).Msg("Failed to get roles for user")
-			responseWithJson(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+		log.Info().
+			Interface("policies", h.e.GetAllSubjects()).
+			Msg("list roles")
 
-		log.Info().Interface("roles", roles).Msg("list roles")
-
-		// Check if the user has permission to access the resource.
-		if !h.checkPermission(roles, url, method) {
-			// if the user doesn't have permission to access the resource, then return 401.
-			responseWithJson(w, http.StatusUnauthorized, "The current user ("+user+") is not allowed to execute "+url+" ["+method+"]\n")
-			return
+		if url != "/init" {
+			ok, _ := h.e.Enforce(user, url)
+			if !ok {
+				responseWithJson(w, http.StatusUnauthorized, "The current user ("+user+") is not allowed to execute "+url+"\n")
+				return
+			}
 		}
 
 		next.ServeHTTP(w, r)
 		return
 	})
-}
-
-// checkPermission check if the user has permission to access the resource.
-func (h *handler) checkPermission(roles []string, url string, act string) bool {
-	for _, role := range roles {
-		ok, err := h.e.Enforce(role, url, act)
-		if err != nil {
-			log.Err(err).Msg("Failed to check permission")
-			return false
-		}
-
-		if ok {
-			return true
-		}
-	}
-
-	return false
 }
 
 // HelloHandler returns "Hello, World!".
@@ -178,4 +140,28 @@ func (h *handler) RolesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	responseWithJson(w, http.StatusOK, roles)
+}
+
+// InitHandler initializes the role.
+func (h *handler) InitHandler(w http.ResponseWriter, r *http.Request) {
+
+	// Modify the policy.
+	h.e.AddPolicy("role:user", "/")
+	h.e.AddPolicy("role:user", "/time")
+
+	h.e.AddPolicy("role:admin", "/*")
+
+	h.e.AddPolicy("role:anonymous", "/")
+
+	h.e.AddGroupingPolicy("xdorro", "role:admin")
+	h.e.AddGroupingPolicy("phuongnd", "role:user")
+
+	// Save the policy back to DB.
+	err := h.e.SavePolicy()
+	if err != nil {
+		log.Fatalf("error: save policy: %s", err)
+		return
+	}
+
+	responseWithJson(w, http.StatusOK, "OK")
 }

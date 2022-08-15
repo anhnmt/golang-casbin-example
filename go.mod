@@ -3,18 +3,19 @@ module github.com/xdorro/golang-casbin-example
 go 1.19
 
 require (
+	github.com/casbin/casbin/v2 v2.51.2
+	github.com/casbin/mongodb-adapter/v3 v3.3.1
 	github.com/go-openapi/inflect v0.19.0
 	github.com/natefinch/lumberjack/v3 v3.0.0-alpha
 	github.com/rs/zerolog v1.27.0
 	github.com/spf13/viper v1.12.0
 	github.com/vk-rv/pvx v0.0.0-20210912195928-ac00bc32f6e7
 	github.com/xdorro/golang-grpc-base-project v1.1.0
+	go.mongodb.org/mongo-driver v1.10.1
 )
 
 require (
 	github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible // indirect
-	github.com/casbin/casbin/v2 v2.51.2 // indirect
-	github.com/casbin/mongodb-adapter/v3 v3.3.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
@@ -39,7 +40,6 @@ require (
 	github.com/xdg-go/stringprep v1.0.3 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a // indirect
 	go.elastic.co/ecszap v1.0.1 // indirect
-	go.mongodb.org/mongo-driver v1.10.1 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
