@@ -17,7 +17,6 @@ vendor/
 .idea/
 .run/
 
-.env
 /coverage.out
 /coverage.html
 /report.json
