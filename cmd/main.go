@@ -150,7 +150,7 @@ func (h *handler) InitHandler(w http.ResponseWriter, r *http.Request) {
 	h.e.AddPolicy("*", "/")
 
 	h.e.AddGroupingPolicy("xdorro", "role:admin")
-	h.e.AddGroupingPolicy("phuongnd", "role:user")
+	h.e.AddGroupingPolicy("ahihi", "role:user")
 
 	// Save the policy back to DB.
 	err := h.e.SavePolicy()
