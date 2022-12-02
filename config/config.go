@@ -1,44 +1,34 @@
 package config
 
 import (
-	"errors"
 	"runtime"
 	"strings"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
-
-	"github.com/xdorro/golang-casbin-example/pkg/log"
 )
 
-// InitConfig create new config
-func InitConfig() {
+// NewConfig initializes the config
+func NewConfig() {
+	viper.AutomaticEnv()
+
+	// Replace env key, exp: database.url -> database_url
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+
+	viper.AddConfigPath(".")
+	viper.SetConfigFile(".env")
+	viper.SetConfigType("env")
+
+	if err := viper.ReadInConfig(); err != nil {
+		log.Fatal().Err(err).Msg("Error reading config file")
+	}
+
+	// set default config
+	defaultConfig()
+
 	log.Info().
 		Str("goarch", runtime.GOARCH).
 		Str("goos", runtime.GOOS).
 		Str("version", runtime.Version()).
 		Msg("Runtime information")
-
-	// SetConfigFile explicitly defines the path, name and extension of the config file.
-	// Viper will use this and not check any of the config paths.
-	// .env - It will search for the .env file in the current directory
-	viper.AddConfigPath(".")
-	viper.SetConfigFile(".env")
-	viper.SetConfigType("env")
-
-	// Set default values
-	defaultConfig()
-
-	// Find and read the config file
-	if err := viper.ReadInConfig(); err != nil {
-		// Config file not found; ignore error if desired
-		var notfound viper.ConfigFileNotFoundError
-		if ok := errors.Is(err, notfound); !ok {
-			log.Err(err).Msgf("Can't read the config file")
-		}
-	}
-
-	viper.AutomaticEnv()
-
-	// Replace env key
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 }

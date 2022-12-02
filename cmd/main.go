@@ -2,22 +2,28 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/casbin/casbin/v2"
 	mongodbadapter "github.com/casbin/mongodb-adapter/v3"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/xdorro/golang-casbin-example/config"
-	"github.com/xdorro/golang-casbin-example/pkg/log"
+	"github.com/xdorro/golang-casbin-example/pkg/logger"
 )
 
 func main() {
-	// Init config
-	config.InitConfig()
+	// -log-path is option for command line
+	logPath := flag.String("log-path", "logs/data.log", "log file path")
+	flag.Parse()
+
+	logger.NewLogger(*logPath)
+	config.NewConfig()
 
 	// Initialize a MongoDB adapter with NewAdapterWithClientOption:
 	// The adapter will use custom mongo client options.
@@ -33,13 +39,13 @@ func main() {
 
 	e, err := casbin.NewCachedEnforcer(viper.GetString("MODEL_PATH"), a)
 	if err != nil {
-		log.Fatalf("error: new enforcer: %s", err)
+		log.Fatal().Msgf("error: new enforcer: %s", err)
 	}
 
 	// Load the policy from DB.
 	err = e.LoadPolicy()
 	if err != nil {
-		log.Fatalf("error: load policy: %s", err)
+		log.Fatal().Msgf("error: load policy: %s", err)
 		return
 	}
 
@@ -53,10 +59,10 @@ func main() {
 	mux.HandleFunc("/init", hdl.InitHandler)
 
 	host := fmt.Sprintf(":%d", viper.GetInt("APP_PORT"))
-	log.Infof("Starting application http://localhost%s", host)
+	log.Info().Msgf("Starting application http://localhost%s", host)
 
 	if err = http.ListenAndServe(host, hdl.middleware(mux)); err != nil {
-		log.Fatalf("error: listen and serve: %s", err)
+		log.Fatal().Err(err).Msg("error: listen and serve")
 		return
 	}
 }
@@ -155,7 +161,7 @@ func (h *handler) InitHandler(w http.ResponseWriter, r *http.Request) {
 	// Save the policy back to DB.
 	err := h.e.SavePolicy()
 	if err != nil {
-		log.Fatalf("error: save policy: %s", err)
+		log.Fatal().Err(err).Msgf("error: save policy")
 		return
 	}
 
